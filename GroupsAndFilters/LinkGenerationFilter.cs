@@ -1,5 +1,7 @@
 using System.Reflection;
 
+namespace GroupsAndFilters;
+
 public static class LinksGenerationFilterExtensions
 {
     public static RouteGroupBuilder AddLinkGeneration(this RouteGroupBuilder builder) 
@@ -20,14 +22,15 @@ public class LinkGenerationFilter : IEndpointFilter
 
         if (result is ILinks response)
         {
-            var generator = context.HttpContext.RequestServices.GetRequiredService<LinkGenerator>();
-            AddLinksToResponse(response, generator);
+            var httpContext = context.HttpContext;
+            var generator = httpContext.RequestServices.GetRequiredService<LinkGenerator>();
+            AddLinksToResponse(httpContext, generator, response);
         }
 
         return result;
     }
 
-    private void AddLinksToResponse(ILinks response, LinkGenerator generator)
+    private void AddLinksToResponse(HttpContext httpContext, LinkGenerator generator, ILinks response)
     {
         var type = response.GetType();
         var links = Attribute
@@ -49,7 +52,11 @@ public class LinkGenerationFilter : IEndpointFilter
                 })
                 .ToList();
 
-            var url = generator.GetPathByName(meta.Name, new RouteValueDictionary(parameters));
+            var url = generator.GetUriByName(
+                httpContext,
+                meta.Name, 
+                new RouteValueDictionary(parameters)
+            );
 
             response.Links.Add(new Link
             {
@@ -71,13 +78,13 @@ public class LinkGenerationFilter : IEndpointFilter
                     {
                         foreach (var nestedResponse in e)
                         {
-                            AddLinksToResponse(nestedResponse, generator);
+                            AddLinksToResponse(httpContext, generator, nestedResponse);
                         }
 
                         break;
                     }
                     case ILinks nestedResponse:
-                        AddLinksToResponse(nestedResponse, generator);
+                        AddLinksToResponse(httpContext, generator, nestedResponse);
                         break;
                 }
             }
